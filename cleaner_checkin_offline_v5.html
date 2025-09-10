@@ -1,8 +1,595 @@
 <!DOCTYPE html>
 <html lang="zh-Hant">
-<head><meta charset="utf-8"><title>清潔人員簽到/簽退（離線單檔 v5）</title></head>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>清潔人員簽到/簽退（離線單檔 v5）</title>
+<style>
+  :root{
+    --bg:#f8fafc;--fg:#0f172a;--muted:#64748b;--card:#ffffff;--br:#e2e8f0;
+    --pri:#111827;--pri-ink:#ffffff;--ok:#065f46;--ok-bg:#ecfdf5;--danger:#9f1239;--danger-bg:#fff1f2;
+  }
+  *{box-sizing:border-box} html,body{height:100%}
+  body{margin:0;background:var(--bg);color:var(--fg);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Noto Sans TC","Microsoft JhengHei","Apple Color Emoji","Segoe UI Emoji",sans-serif}
+  header{position:sticky;top:0;background:rgba(255,255,255,.9);backdrop-filter:blur(8px);border-bottom:1px solid var(--br);}
+  .container{max-width:1100px;margin:0 auto;padding:12px 16px}
+  h1{font-size:20px;margin:0 8px}
+  .row{display:flex;gap:16px;flex-wrap:wrap}
+  .grow{flex:1 1 500px}
+  .side{flex:1 1 320px;max-width:420px}
+  .card{background:var(--card);border:1px solid var(--br);border-radius:16px;box-shadow:0 1px 2px rgba(15,23,42,.06);padding:16px}
+  .title{display:flex;align-items:center;gap:8px;font-weight:600}
+  .muted{color:var(--muted)}
+  button,.btn{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--br);border-radius:10px;padding:8px 10px;background:#fff;cursor:pointer}
+  button:hover{background:#f1f5f9}
+  .btn-primary{background:var(--pri);color:var(--pri-ink);border-color:#0b1220}
+  .btn-primary:hover{background:#0b1324}
+  .btn-danger{background:var(--danger-bg);color:var(--danger);border-color:#fecdd3}
+  .btn-ok{background:var(--ok-bg);color:var(--ok);border-color:#86efac}
+  input,select,textarea{border:1px solid var(--br);border-radius:10px;padding:8px 10px;font-size:14px;background:#fff}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th,td{padding:6px 8px;border-bottom:1px solid var(--br);text-align:left}
+  .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .grid-3{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+  .pill{display:inline-block;padding:2px 8px;border-radius:999px;border:1px solid #c7d2fe;background:#eef2ff;color:#3730a3;font-size:12px}
+  .list{border:1px solid var(--br);border-radius:12px;overflow:hidden;background:#fff}
+  .list .item{display:flex;justify-content:space-between;align-items:center;padding:8px 10px;border-top:1px solid var(--br)}
+  .list .item:first-child{border-top:0}
+  .w-100{width:100%}
+  .mt-4{margin-top:16px}.mt-2{margin-top:8px}.mt-6{margin-top:24px}.mt-1{margin-top:4px}.mb-0{margin-bottom:0}
+  .hide{display:none}
+  video{width:100%;height:auto;border-radius:12px;background:#000}
+  .aspect-video{position:relative;padding-top:56.25%}
+  .aspect-video > *{position:absolute;inset:0}
+  .table-wrap{overflow:auto}
+  @media print{
+    header,.no-print,video,#cameraArea{display:none!important}
+    body{background:#fff}
+    .card{border:0;box-shadow:none;padding:0}
+    .container{max-width:none}
+    .page-break{break-inside:avoid;page-break-inside:avoid}
+  }
+</style>
+</head>
 <body>
-<p>清潔人員簽到/簽退系統 單檔版 (v5)。</p>
-<!-- Full content省略，應放置完整的 cleaner_checkin_offline_v5.html -->
+<header>
+  <div class="container" style="display:flex;align-items:center;gap:8px;">
+    <span>🧹</span><h1>清潔人員簽到 / 簽退（離線單檔 v5）</h1>
+    <div style="margin-left:auto;display:flex;align-items:center;gap:8px;" class="no-print">
+      <span class="muted">月份</span>
+      <input id="monthPicker" type="month">
+      <select id="filterStaff" title="篩選人員"></select>
+      <button id="btnExport" class="btn">⬇️ 匯出CSV</button>
+      <button id="btnPrint" class="btn">🖨️ 列印簽到簿</button>
+    </div>
+  </div>
+</header>
+
+<div class="container">
+  <div class="row">
+    <section class="grow">
+      <div class="card">
+        <div class="title">🔑 管理員登入</div>
+        <div class="mt-2 no-print">
+          <div id="adminStatus" class="muted">未登入</div>
+          <div class="mt-2" id="adminLoginBox">
+            <input id="adminCodeInput" placeholder="輸入管理員代碼，如 A001" style="width:200px">
+            <button id="btnAdminLogin" class="btn">登入</button>
+          </div>
+          <div class="mt-2 hide" id="adminAuthedBox">
+            <span id="adminAuthedPill" class="pill"></span>
+            <button id="btnAdminLogout" class="btn">登出</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="card mt-4">
+        <div class="title">📷 掃描 / 指定人員</div>
+        <div class="mt-2 row no-print">
+          <div class="grow">
+            <div class="aspect-video" id="cameraArea">
+              <video id="video" playsinline muted></video>
+            </div>
+            <div class="mt-2 row">
+              <button id="btnToggleCam" class="btn">啟動相機</button>
+              <select id="cameraSelect"></select>
+              <input id="manualStaff" placeholder="或手動輸入員工代號（如 C001）" style="width:260px">
+              <button id="btnUseManual" class="btn">選擇</button>
+            </div>
+            <div class="mt-1 muted" id="scanMsg"></div>
+          </div>
+          <div class="side">
+            <div class="card" style="padding:12px">
+              <div class="muted">辨識到的人員</div>
+              <div id="pickedStaff" style="font-weight:600;min-height:28px;margin-top:4px">—</div>
+              <div class="mt-2 grid-3">
+                <button data-shift="AM" class="btn" id="btnAM">上午</button>
+                <button data-shift="PM" class="btn" id="btnPM">下午</button>
+                <button data-shift="OT" class="btn" id="btnOT">加班</button>
+              </div>
+              <div class="mt-2 grid-2">
+                <button data-action="IN"  class="btn btn-ok" id="btnIN">簽到</button>
+                <button data-action="OUT" class="btn btn-danger" id="btnOUT">簽退</button>
+              </div>
+              <input id="note" class="mt-2 w-100" placeholder="備註（選填）">
+              <button id="btnSave" class="mt-2 w-100 btn-primary">✅ 儲存紀錄</button>
+              <button id="btnUndo" class="mt-2 w-100 btn-danger">🗑️ 刪除最近一筆</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card mt-4">
+        <div class="title">⏱️ 當月紀錄</div>
+        <div class="table-wrap mt-2">
+          <table id="tblMonth">
+            <thead>
+              <tr>
+                <th>日期</th><th>時間</th><th>員工</th><th>班別</th><th>動作</th><th>管理員</th><th>備註</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <aside class="side">
+      <div class="card">
+        <div class="title">⚙️ 人員名單與管理員</div>
+        <div class="grid-2 mt-2">
+          <div>
+            <div class="muted">清潔人員</div>
+            <div id="staffList" class="list mt-1"></div>
+            <div class="mt-2 row">
+              <input id="addSid" placeholder="代號 C001" style="width:110px">
+              <input id="addSname" placeholder="姓名" style="width:140px">
+              <button id="btnAddStaff" class="btn">新增</button>
+            </div>
+          </div>
+          <div>
+            <div class="muted">管理員</div>
+            <div id="adminList" class="list mt-1"></div>
+            <div class="mt-2 row">
+              <input id="addAcode" placeholder="代碼 A001" style="width:110px">
+              <input id="addAname" placeholder="姓名/身分" style="width:140px">
+              <button id="btnAddAdmin" class="btn">新增</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card mt-4">
+        <div class="title">📄 月度簽到簿預覽（列印用）</div>
+        <div id="books" class="mt-2"></div>
+      </div>
+    </aside>
+  </div>
+</div>
+
+<script>
+// ===== Local Storage Keys =====
+const LS = {
+  staff: "cleaner_staff_v1",
+  admins: "cleaner_admins_v1",
+  records: "cleaner_attendance_v1",
+};
+// ===== Utilities =====
+const $ = sel => document.querySelector(sel);
+const $$ = sel => Array.from(document.querySelectorAll(sel));
+const todayISO = () => new Date().toISOString().slice(0,10);
+const monthKey = d => d.slice(0,7);
+const fmtTime = ts => new Date(ts).toLocaleTimeString();
+const csvEsc = v => {
+  if (v==null) return "";
+  const s = String(v);
+  if (s.includes('"') || s.includes(",") || s.includes("\n")) return '"' + s.replaceAll('"','""') + '"';
+  return s;
+};
+function saveFile(filename, text, mime="text/plain;charset=utf-8"){
+  const blob = new Blob([text], {type:mime});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = filename; document.body.appendChild(a); a.click(); a.remove();
+  URL.revokeObjectURL(url);
+}
+function loadLS(key, fallback){
+  try{ const v = localStorage.getItem(key); return v? JSON.parse(v): fallback; }catch(e){ return fallback; }
+}
+function saveLS(key, val){ localStorage.setItem(key, JSON.stringify(val)); }
+
+// ===== Data =====
+let STAFF = loadLS(LS.staff, [
+  {id:"C001", name:"王小美"},
+  {id:"C002", name:"李阿花"},
+  {id:"C003", name:"張大同"},
+  {id:"C004", name:"陳雀惠"},
+  {id:"C005", name:"陳清淇"},
+]);
+let ADMINS = loadLS(LS.admins, [
+  {code:"A001", name:"管理員A001"},
+]);
+let RECS = loadLS(LS.records, []);
+
+let LOGGED = null;
+let CUR_STAFF = null;
+let CUR_SHIFT = "AM";
+let CUR_ACTION = "IN";
+
+// ===== Elements =====
+const monthPicker = $("#monthPicker");
+const filterStaff = $("#filterStaff");
+const btnExport = $("#btnExport");
+const btnPrint = $("#btnPrint");
+
+const adminStatus = $("#adminStatus");
+const adminLoginBox = $("#adminLoginBox");
+const adminAuthedBox = $("#adminAuthedBox");
+const adminAuthedPill = $("#adminAuthedPill");
+const adminCodeInput = $("#adminCodeInput");
+const btnAdminLogin = $("#btnAdminLogin");
+const btnAdminLogout = $("#btnAdminLogout");
+
+const video = $("#video");
+const btnToggleCam = $("#btnToggleCam");
+const cameraSelect = $("#cameraSelect");
+const scanMsg = $("#scanMsg");
+const manualStaff = $("#manualStaff");
+const btnUseManual = $("#btnUseManual");
+
+const pickedStaff = $("#pickedStaff");
+const btnAM = $("#btnAM"); const btnPM = $("#btnPM"); const btnOT = $("#btnOT");
+const btnIN = $("#btnIN"); const btnOUT = $("#btnOUT");
+const note = $("#note");
+const btnSave = $("#btnSave");
+const btnUndo = $("#btnUndo");
+
+const tblMonthBody = $("#tblMonth tbody");
+const staffList = $("#staffList");
+const adminList = $("#adminList");
+const addSid = $("#addSid"); const addSname = $("#addSname"); const btnAddStaff = $("#btnAddStaff");
+const addAcode = $("#addAcode"); const addAname = $("#addAname"); const btnAddAdmin = $("#btnAddAdmin");
+const books = $("#books");
+
+// ===== Init =====
+monthPicker.value = monthKey(todayISO());
+renderStaffFilter();
+renderMonth();
+renderLists();
+renderBooks();
+updatePicked();
+
+// ===== URL Query Support =====
+function getQuery(){
+  const q = {};
+  try{
+    const sp = new URLSearchParams(location.search);
+    for (const [k,v] of sp.entries()){ q[k.toLowerCase()] = v; }
+  }catch(e){}
+  return q;
+}
+const Q = getQuery();
+if (Q.staff){
+  const id = (Q.staff.includes(":") ? Q.staff.split(":")[1] : Q.staff).trim();
+  const st = STAFF.find(s=>s.id===id);
+  if (st){ CUR_STAFF = st; updatePicked(); }
+}
+if (Q.admin){
+  const adm = ADMINS.find(a=>a.code===(Q.admin||"").trim());
+  if (adm){
+    LOGGED = adm;
+    adminStatus.textContent = "已登入";
+    adminLoginBox.classList.add("hide");
+    adminAuthedBox.classList.remove("hide");
+    adminAuthedPill.textContent = `${adm.name}（${adm.code}）`;
+  }
+}
+if (Q.shift){ setShift(Q.shift.toUpperCase()); }
+if (Q.action){ setAction(Q.action.toUpperCase()); }
+window.addEventListener("load", ()=>{
+  if (Q.autosave==="1" && LOGGED && CUR_STAFF){
+    btnSave.click();
+    scanMsg.textContent = "已自動儲存一筆出勤紀錄";
+    try{
+      const url = new URL(location.href);
+      url.search = "";
+      history.replaceState({}, "", url.toString());
+    }catch(e){}
+  }
+});
+
+// ===== Admin Login =====
+btnAdminLogin.addEventListener("click", ()=>{
+  const code = adminCodeInput.value.trim();
+  const adm = ADMINS.find(a=>a.code===code);
+  if (!adm){ alert("管理員代碼錯誤"); return; }
+  LOGGED = adm;
+  adminStatus.textContent = "已登入";
+  adminLoginBox.classList.add("hide");
+  adminAuthedBox.classList.remove("hide");
+  adminAuthedPill.textContent = `${adm.name}（${adm.code}）`;
+  adminCodeInput.value = "";
+});
+btnAdminLogout.addEventListener("click", ()=>{
+  LOGGED = null;
+  adminStatus.textContent = "未登入";
+  adminLoginBox.classList.remove("hide");
+  adminAuthedBox.classList.add("hide");
+});
+
+// ===== Shift & Action =====
+function setShift(s){
+  CUR_SHIFT = s;
+  [btnAM,btnPM,btnOT].forEach(b=>b.classList.remove("btn-primary"));
+  ({AM:btnAM, PM:btnPM, OT:btnOT})[s].classList.add("btn-primary");
+}
+function setAction(a){
+  CUR_ACTION = a;
+  [btnIN,btnOUT].forEach(b=>b.classList.remove("btn-primary"));
+  ({IN:btnIN, OUT:btnOUT})[a].classList.add("btn-primary");
+}
+btnAM.onclick=()=>setShift("AM"); btnPM.onclick=()=>setShift("PM"); btnOT.onclick=()=>setShift("OT");
+btnIN.onclick=()=>setAction("IN"); btnOUT.onclick=()=>setAction("OUT");
+setShift("AM"); setAction("IN");
+
+// ===== Camera & Scan (BarcodeDetector) =====
+let stream = null;
+let detector = null;
+let scanTimer = null;
+async function listCams(){
+  const devices = await navigator.mediaDevices.enumerateDevices();
+  const vids = devices.filter(d=>d.kind==="videoinput");
+  cameraSelect.innerHTML = "";
+  vids.forEach((d,i)=>{
+    const opt = document.createElement("option");
+    opt.value = d.deviceId; opt.textContent = d.label || `相機 ${i+1}`;
+    cameraSelect.appendChild(opt);
+  });
+}
+async function startCam(deviceId){
+  if (stream){ stream.getTracks().forEach(t=>t.stop()); stream=null; }
+  stream = await navigator.mediaDevices.getUserMedia({
+    video: {deviceId: deviceId?{exact:deviceId}:undefined, facingMode:"environment"},
+    audio:false
+  });
+  video.srcObject = stream;
+  await video.play();
+}
+async function ensureDetector(){
+  if ("BarcodeDetector" in window){
+    const formats = ["qr_code","code_128","code_39","ean_13"];
+    detector = new window.BarcodeDetector({formats});
+  }else{
+    detector = null;
+  }
+}
+async function toggleCam(){
+  if (video.srcObject){
+    if (scanTimer) { clearInterval(scanTimer); scanTimer=null; }
+    stream.getTracks().forEach(t=>t.stop()); stream=null;
+    video.srcObject=null; btnToggleCam.textContent="啟動相機"; scanMsg.textContent="";
+    return;
+  }
+  try{
+    await listCams();
+    await startCam(cameraSelect.value || undefined);
+    await ensureDetector();
+    btnToggleCam.textContent="停止相機";
+    scanLoop();
+  }catch(e){
+    scanMsg.textContent = "相機啟動失敗："+e;
+  }
+}
+async function scanOnce(){
+  if (!video.videoWidth) return;
+  if (detector){
+    try{
+      const codes = await detector.detect(video);
+      if (codes && codes.length){
+        const raw = codes[0].rawValue || "";
+        onScan(raw);
+        return;
+      }
+    }catch(e){ }
+  }
+}
+function scanLoop(){
+  if (scanTimer) clearInterval(scanTimer);
+  scanTimer = setInterval(scanOnce, 300);
+}
+btnToggleCam.addEventListener("click", toggleCam);
+cameraSelect.addEventListener("change", async ()=>{
+  if (video.srcObject){ await startCam(cameraSelect.value); }
+});
+btnUseManual.addEventListener("click", ()=>{
+  const t = manualStaff.value.trim();
+  if (!t){ alert("請輸入員工代號"); return; }
+  onScan(t);
+});
+function onScan(text){
+  const id = (text.includes(":") ? text.split(":")[1] : text).trim();
+  const st = STAFF.find(s=>s.id===id);
+  if (st){
+    CUR_STAFF = st; updatePicked();
+    scanMsg.textContent = `已辨識：${st.name}（${st.id}）`;
+  }else{
+    scanMsg.textContent = `無此員工代號：${id}`;
+  }
+}
+
+// ===== Save / Undo =====
+btnSave.addEventListener("click", ()=>{
+  if (!LOGGED){ alert("請先以管理員代碼登入"); return; }
+  if (!CUR_STAFF){ alert("尚未辨識到清潔人員 QR/代號"); return; }
+  const rec = {
+    ts: Date.now(),
+    dateISO: todayISO(),
+    staffId: CUR_STAFF.id,
+    staffName: CUR_STAFF.name,
+    adminCode: LOGGED.code,
+    adminName: LOGGED.name,
+    shift: CUR_SHIFT,
+    action: CUR_ACTION,
+    note: note.value.trim() || ""
+  };
+  RECS.unshift(rec);
+  saveLS(LS.records, RECS);
+  note.value="";
+  renderMonth();
+  renderBooks();
+});
+btnUndo.addEventListener("click", ()=>{
+  if (!LOGGED){ alert("請先登入"); return; }
+  if (!RECS.length) return;
+  const r = RECS[0];
+  if (confirm(`刪除最近一筆：${r.staffName} ${r.shift} ${r.action} @ ${new Date(r.ts).toLocaleString()} ?`)){
+    RECS.shift();
+    saveLS(LS.records, RECS);
+    renderMonth(); renderBooks();
+  }
+});
+
+// ===== Staff/Admin mgmt =====
+function renderLists(){
+  staffList.innerHTML = "";
+  STAFF.forEach(s=>{
+    const div = document.createElement("div");
+    div.className="item";
+    div.innerHTML = `<span>${s.name}（${s.id}）</span>`;
+    const b = document.createElement("button");
+    b.className="btn btn-danger"; b.textContent="刪";
+    b.onclick = ()=>{
+      if (confirm(`刪除員工 ${s.id} ?（出勤紀錄不會被刪除）`)){
+        STAFF = STAFF.filter(x=>x.id!==s.id); saveLS(LS.staff, STAFF);
+        renderLists(); renderStaffFilter();
+      }
+    };
+    div.appendChild(b);
+    staffList.appendChild(div);
+  });
+  adminList.innerHTML="";
+  ADMINS.forEach(a=>{
+    const div = document.createElement("div");
+    div.className="item";
+    div.innerHTML = `<span>${a.name}（${a.code}）</span>`;
+    const b = document.createElement("button");
+    b.className="btn btn-danger"; b.textContent="刪";
+    b.onclick = ()=>{
+      if (confirm(`刪除管理員 ${a.code}?`)){
+        ADMINS = ADMINS.filter(x=>x.code!==a.code); saveLS(LS.admins, ADMINS);
+        renderLists();
+      }
+    };
+    div.appendChild(b);
+    adminList.appendChild(div);
+  });
+}
+btnAddStaff.onclick = ()=>{
+  const id = addSid.value.trim(); const name = addSname.value.trim();
+  if (!id || !name) return;
+  if (STAFF.some(s=>s.id===id)) { alert("此員工代號已存在"); return; }
+  STAFF.push({id,name}); saveLS(LS.staff, STAFF);
+  addSid.value=""; addSname.value=""; renderLists(); renderStaffFilter();
+};
+btnAddAdmin.onclick = ()=>{
+  const code = addAcode.value.trim(); const name = addAname.value.trim();
+  if (!code || !name) return;
+  if (ADMINS.some(a=>a.code===code)) { alert("此管理員代碼已存在"); return; }
+  ADMINS.push({code,name}); saveLS(LS.admins, ADMINS);
+  addAcode.value=""; addAname.value=""; renderLists();
+};
+
+function renderStaffFilter(){
+  const cur = filterStaff.value || "all";
+  filterStaff.innerHTML = `<option value="all">全部人員</option>` + 
+    STAFF.map(s=>`<option value="${s.id}">${s.id} — ${s.name}</option>`).join("");
+  filterStaff.value = cur;
+}
+
+function updatePicked(){
+  pickedStaff.textContent = CUR_STAFF ? `${CUR_STAFF.name}（${CUR_STAFF.id}）` : "—";
+}
+
+// ===== Month view & export & books =====
+function getMonthRecords(){
+  const m = monthPicker.value;
+  return RECS.filter(r=>monthKey(r.dateISO)===m && (filterStaff.value==="all" || r.staffId===filterStaff.value));
+}
+function renderMonth(){
+  const rs = getMonthRecords().slice().sort((a,b)=>a.ts-b.ts);
+  tblMonthBody.innerHTML = rs.map(r=>{
+    const shift = r.shift==="AM"?"上午":r.shift==="PM"?"下午":"加班";
+    const act = r.action==="IN"?"簽到":"簽退";
+    return `<tr>
+      <td>${r.dateISO}</td><td>${fmtTime(r.ts)}</td>
+      <td>${r.staffName}（${r.staffId}）</td><td>${shift}</td><td>${act}</td>
+      <td>${r.adminName}（${r.adminCode}）</td><td>${r.note||""}</td>
+    </tr>`;
+  }).join("") || `<tr><td colspan="7" style="text-align:center;color:#94a3b8;padding:24px">本月尚無紀錄</td></tr>`;
+}
+function renderBooks(){
+  const m = monthPicker.value;
+  const map = new Map();
+  RECS.forEach(r=>{
+    if (monthKey(r.dateISO)!==m) return;
+    if (!map.has(r.staffId)) map.set(r.staffId, {staff:{id:r.staffId,name:r.staffName}, days:{}});
+    const g = map.get(r.staffId);
+    if (!g.days[r.dateISO]) g.days[r.dateISO] = { AM:{IN:null,OUT:null}, PM:{IN:null,OUT:null}, OT:{IN:null,OUT:null} };
+    g.days[r.dateISO][r.shift][r.action] = r;
+  });
+  const list = Array.from(map.values()).sort((a,b)=>a.staff.id.localeCompare(b.staff.id));
+  books.innerHTML = list.map(({staff,days})=>{
+    const rows = Object.keys(days).sort().map(d=>{
+      const v = days[d];
+      const TD = (rec)=> rec? fmtTime(rec.ts): "";
+      const ADM = (rec)=> rec? `${rec.adminName}`: "";
+      const adminName = ADM(v.AM.IN)||ADM(v.PM.IN)||ADM(v.OT.IN)||"";
+      return `<tr>
+        <td>${d}</td>
+        <td>${TD(v.AM.IN)}</td><td>${TD(v.AM.OUT)}</td>
+        <td>${TD(v.PM.IN)}</td><td>${TD(v.PM.OUT)}</td>
+        <td>${TD(v.OT.IN)}</td><td>${TD(v.OT.OUT)}</td>
+        <td>${adminName}</td>
+      </tr>`;
+    }).join("");
+    return `<div class="card page-break" style="margin-top:12px">
+      <div style="font-weight:600">${staff.name}（${staff.id}）— ${m}</div>
+      <div class="table-wrap mt-1">
+        <table>
+          <thead>
+            <tr style="background:#f1f5f9">
+              <th>日期</th>
+              <th>上午IN</th><th>上午OUT</th>
+              <th>下午IN</th><th>下午OUT</th>
+              <th>加班IN</th><th>加班OUT</th>
+              <th>管理員簽名</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    </div>`;
+  }).join("") || `<div class="muted">本月尚無簽到簿內容</div>`;
+}
+
+filterStaff.addEventListener("change", ()=>{ renderMonth(); });
+monthPicker.addEventListener("change", ()=>{ renderMonth(); renderBooks(); });
+
+btnExport.addEventListener("click", ()=>{
+  const m = monthPicker.value;
+  const rs = getMonthRecords().slice().sort((a,b)=>a.ts-b.ts);
+  const rows = [
+    ["日期","時間","員工代號","員工姓名","班別","動作","管理員代碼","管理員姓名","備註"],
+    ...rs.map(r=>[r.dateISO, new Date(r.ts).toLocaleTimeString(), r.staffId, r.staffName, r.shift, r.action, r.adminCode, r.adminName, r.note||""])
+  ];
+  const csv = rows.map(r=>r.map(csvEsc).join(",")).join("\n");
+  saveFile(`${m}_cleaner_attendance.csv`, csv, "text/csv;charset=utf-8");
+});
+btnPrint.addEventListener("click", ()=>window.print());
+
+// ===== Keyboard helpers =====
+adminCodeInput.addEventListener("keydown", e=>{ if (e.key==="Enter") btnAdminLogin.click(); });
+manualStaff.addEventListener("keydown", e=>{ if (e.key==="Enter") btnUseManual.click(); });
+</script>
 </body>
 </html>
